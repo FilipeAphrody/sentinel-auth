@@ -1,0 +1,64 @@
+name: Sentinel CI
+
+# This workflow triggers on every push or pull request to the main branch.
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    # Setup database and cache services for integration tests.
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: sentinel_test
+        ports:
+          - 5432:5432
+        # Ensure the container is ready before starting the tests.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Install Dependencies
+        run: go mod tidy
+
+      - name: Verify Build
+        run: go build -v ./cmd/api
+
+      - name: Run Tests
+        env:
+          # Match the credentials provided in the services block above
+          DB_URL: postgres://user:password@localhost:5432/sentinel_test?sslmode=disable
+          REDIS_URL: localhost:6379
+          JWT_SECRET: ci-test-secret-key
+        run: go test -v ./...
