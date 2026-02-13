@@ -1,42 +1,37 @@
-# --- Stage 1: Builder ---
-# We use the official Go image based on Alpine Linux for a small build footprint
-FROM golang:1.21-alpine AS builder
+# Atualizado para golang:1.25-alpine para corresponder ao go.mod
+FROM golang:1.25-alpine AS builder
 
-# Set the working directory inside the container
+# Instalar dependências de build (git é necessário para baixar módulos)
+RUN apk add --no-cache git
+
 WORKDIR /app
 
-# Copy the dependency files first
-# This leverages Docker's layer caching: if go.mod hasn't changed, 
-# Docker won't re-download dependencies, speeding up builds significantly.
+# Copiar arquivos de dependência
 COPY go.mod go.sum ./
 
-# Download dependencies
+# Baixar dependências
 RUN go mod download
 
-# Copy the rest of the source code
+# Copiar o código fonte
 COPY . .
 
-# Build the binary
-# CGO_ENABLED=0: Disables C bindings, ensuring a static binary (easier to run on Alpine/Scratch)
-# GOOS=linux: Forces Linux build target (even if you build this on Windows)
-# -ldflags="-s -w": Strips debug information to reduce binary size
+# Compilar o binário
+# -ldflags="-s -w" reduz o tamanho do binário removendo informações de debug
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o sentinel cmd/api/main.go
 
-# --- Stage 2: Runner ---
-# We use a pristine Alpine image for the final container
+# --- Estágio Final (Imagem leve) ---
 FROM alpine:latest
 
-# Install CA certificates
-# Essential if your app makes HTTPS calls (e.g. to external APIs or email services)
-RUN apk --no-cache add ca-certificates
+# Instalar certificados CA para chamadas HTTPS externas
+RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /root/
 
-# Copy only the compiled binary from the Builder stage
+# Copiar o binário do estágio de build
 COPY --from=builder /app/sentinel .
 
-# Expose the port defined in main.go
+# Expor a porta da API
 EXPOSE 8080
 
-# Command to start the application
+# Comando de inicialização
 CMD ["./sentinel"]

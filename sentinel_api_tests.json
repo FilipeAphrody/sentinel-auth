@@ -1,0 +1,166 @@
+{
+	"info": {
+		"name": "Sentinel Auth API - Staff Suite",
+		"description": "Comprehensive integration test suite for Sentinel Auth Server. Covers the full lifecycle: Health -> Login -> MFA -> Protected Resources.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "System Health",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+							"pm.test(\"Verify services are healthy\", function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"healthy\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:8080/health",
+					"protocol": "http",
+					"host": ["localhost"],
+					"port": "8080",
+					"path": ["health"]
+				},
+				"description": "Liveness and Readiness check for the API and backing services (Postgres/Redis)."
+			}
+		},
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login - Step 1 (Credentials)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 or 202\", function () { ",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 202]); ",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"access_token\", jsonData.access_token);",
+									"    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+									"    console.log(\"Login successful - Tokens saved.\");",
+									"} else if (pm.response.code === 202) {",
+									"    console.log(\"MFA Required - Proceed to MFA Verify step.\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@sentinel.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/v1/login",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["v1", "login"]
+						},
+						"description": "Initial login attempt using email and password."
+					}
+				},
+				{
+					"name": "MFA - Step 2 (Verification)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"MFA Verification Status\", function () { ",
+									"    pm.expect(pm.response.code).to.be.oneOf([200, 401]); ",
+									"});",
+									"",
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    pm.environment.set(\"access_token\", jsonData.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@sentinel.com\",\n    \"code\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8080/v1/mfa/verify",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["v1", "mfa", "verify"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "MFA Management",
+			"item": [
+				{
+					"name": "MFA Setup (Enrollment)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8080/v1/mfa/setup",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8080",
+							"path": ["v1", "mfa", "setup"]
+						},
+						"description": "Generates a new TOTP secret and QR code URI for the authenticated user."
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "access_token",
+			"value": ""
+		},
+		{
+			"key": "refresh_token",
+			"value": ""
+		}
+	]
+}

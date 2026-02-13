@@ -63,4 +63,3 @@ INSERT INTO permissions (slug, description) VALUES
 ('auth:manage', 'Can manage all users and roles'),
 ('profile:read', 'Can read own profile')
 ON CONFLICT (slug) DO NOTHING;
-```
