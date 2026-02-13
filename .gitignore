@@ -1,0 +1,6 @@
+bin/
+sentinel
+sentinel.exe
+.env
+*.log
+vendor/
